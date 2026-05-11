@@ -374,6 +374,104 @@ namespace MuMech.Mcp
             };
         }
 
+        // --- mj_logs -------------------------------------------------------
+        public static JsonRpcTransport.ToolDefinition Logs(McpLogStream stream)
+        {
+            var input = new JsonObject()
+                .Set("type", "object")
+                .Set("properties", new JsonObject()
+                    .Set("stream", new JsonObject().Set("type", "string").Set("enum", new JsonArray().Add("mechjeb").Add("ksp_log").Add("both"))
+                        .Set("default", "mechjeb")
+                        .Set("description", "Which log source. Default 'mechjeb' restricts to MechJeb-tagged records. 'ksp_log' tails KSP.log on disk. 'both' merges."))
+                    .Set("level", new JsonObject().Set("type", "string").Set("enum", new JsonArray().Add("Log").Add("Warning").Add("Error").Add("Exception").Add("Assert")))
+                    .Set("substring", new JsonObject().Set("type", "string"))
+                    .Set("regex", new JsonObject().Set("type", "string"))
+                    .Set("since_seq", new JsonObject().Set("type", "integer"))
+                    .Set("until_seq", new JsonObject().Set("type", "integer"))
+                    .Set("limit", new JsonObject().Set("type", "integer").Set("default", 100).Set("minimum", 1).Set("maximum", 500))
+                    .Set("message_limit", new JsonObject().Set("type", "integer").Set("default", 1024)
+                        .Set("description", "Per-record message char cap. 0 = no truncation."))
+                    .Set("ksp_log_tail_bytes", new JsonObject().Set("type", "integer").Set("default", 8 * 1024 * 1024)))
+                .Set("additionalProperties", false);
+
+            return new JsonRpcTransport.ToolDefinition
+            {
+                Name = "mj_logs",
+                Description = "Filtered search over the in-memory MechJeb log ring buffer and/or KSP.log on disk. " +
+                              "Defaults to MechJeb-tagged records only (lower risk of exposing other mods' logs).",
+                InputSchema = input,
+                Annotations = new JsonObject()
+                    .Set("readOnlyHint", true)
+                    .Set("idempotentHint", true)
+                    .Set("openWorldHint", false),
+                IsMutating = false,
+                Handler = (args, ctx) =>
+                {
+                    JsonObject a = args as JsonObject ?? new JsonObject();
+                    string streamSel = GetString(a, "stream", "mechjeb");
+                    string levelSel = GetString(a, "level", null);
+                    string substring = GetString(a, "substring", null);
+                    string regexStr = GetString(a, "regex", null);
+                    long sinceSeq = GetLong(a, "since_seq", 0);
+                    long untilSeq = GetLong(a, "until_seq", 0);
+                    int limit = (int)GetLong(a, "limit", 100);
+                    int msgLimit = (int)GetLong(a, "message_limit", 1024);
+                    int tailBytes = (int)GetLong(a, "ksp_log_tail_bytes", KspLogFileSearch.DefaultTailBytes);
+
+                    Regex regex = null;
+                    if (!string.IsNullOrEmpty(regexStr))
+                    {
+                        try { regex = new Regex(regexStr, RegexOptions.Compiled, TimeSpan.FromMilliseconds(200)); }
+                        catch (ArgumentException) { return JsonRpcTransport.ToolError(ErrorCode.SchemaInvalid, "Invalid regex: " + regexStr); }
+                    }
+
+                    var records = new JsonArray();
+                    if (streamSel == "mechjeb" || streamSel == "both")
+                    {
+                        var snapshot = stream.Snapshot(sinceSeq, untilSeq, limit);
+                        foreach (McpLogRecord r in snapshot)
+                        {
+                            if (levelSel != null && !r.Level.ToString().Equals(levelSel, StringComparison.OrdinalIgnoreCase)) continue;
+                            // For 'mechjeb' stream, require a MechJeb tag prefix.
+                            if (streamSel == "mechjeb" && LogRecordJson.ExtractTag(r.Message) == null) continue;
+                            if (substring != null && (r.Message == null || r.Message.IndexOf(substring, StringComparison.Ordinal) < 0)) continue;
+                            if (regex != null && !regex.IsMatch(r.Message ?? "")) continue;
+                            records.Add(LogRecordJson.ToJson(r, msgLimit));
+                            if (records.Count >= limit) break;
+                        }
+                    }
+                    if ((streamSel == "ksp_log" || streamSel == "both") && records.Count < limit)
+                    {
+                        int kspLimit = limit - records.Count;
+                        var lines = KspLogFileSearch.Tail(substring, regex, tailBytes, kspLimit);
+                        foreach (KspLogFileSearch.Line line in lines)
+                        {
+                            var o = new JsonObject()
+                                .Set("source", "ksp_log")
+                                .Set("byte_offset", line.byte_offset)
+                                .Set("text", line.text);
+                            records.Add(o);
+                        }
+                    }
+                    return JsonRpcTransport.Ok(new JsonObject()
+                        .Set("stream", streamSel)
+                        .Set("count", records.Count)
+                        .Set("records", records));
+                },
+            };
+        }
+
+        private static string GetString(JsonObject o, string key, string defaultValue)
+        {
+            if (o.TryGet(key, out JsonValue v) && v.Type == JsonType.String) return v.AsString;
+            return defaultValue;
+        }
+        private static long GetLong(JsonObject o, string key, long defaultValue)
+        {
+            if (o.TryGet(key, out JsonValue v) && v.Type == JsonType.Number) return v.AsInt;
+            return defaultValue;
+        }
+
         // --- mj_ops_list / mj_ops_status -----------------------------------
         public static JsonRpcTransport.ToolDefinition OpsList(OpRegistry ops)
         {

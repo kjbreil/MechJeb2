@@ -48,6 +48,7 @@ namespace MuMech.Mcp
         private JsonRpcTransport _transport;
         private McpRegistry _registry;
         private OpRegistry _ops;
+        private McpLogStream _logStream;
         private string _serverInstanceId;
         private int _boundPort;
 
@@ -106,6 +107,12 @@ namespace MuMech.Mcp
             _ops = new OpRegistry();
             _ops.SubscribeEvents();
 
+            // Log capture: subscribe to Application.logMessageReceivedThreaded
+            // as early as possible so initialization messages from later
+            // MechJeb modules end up in the buffer.
+            _logStream = new McpLogStream();
+            _logStream.Subscribe();
+
             // Top-level tool surface.
             var tools = new List<JsonRpcTransport.ToolDefinition>();
             tools.Add(BuildDevPingTool());
@@ -116,6 +123,7 @@ namespace MuMech.Mcp
             tools.Add(Tools.Cancel(_ops));
             tools.Add(Tools.OpsList(_ops));
             tools.Add(Tools.OpsStatus(_ops));
+            tools.Add(Tools.Logs(_logStream));
 
             _transport = new JsonRpcTransport(tools, _audit, _settings, () => _serverInstanceId);
 
@@ -255,6 +263,7 @@ namespace MuMech.Mcp
             catch { }
 
             try { _ops?.Dispose(); } catch { }
+            try { _logStream?.Dispose(); } catch { }
             try { _audit?.Dispose(); } catch { }
 
             _listener = null;
@@ -264,6 +273,7 @@ namespace MuMech.Mcp
             _audit = null;
             _ops = null;
             _registry = null;
+            _logStream = null;
 
             Debug.Log("[MechJeb-MCP] Stopped.");
         }
