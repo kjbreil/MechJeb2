@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEngine;
@@ -45,12 +46,16 @@ namespace MuMech.Mcp
         private CancellationTokenSource _cts;
         private Task _acceptTask;
         private JsonRpcTransport _transport;
+        private McpRegistry _registry;
+        private OpRegistry _ops;
         private string _serverInstanceId;
         private int _boundPort;
 
         public string ServerInstanceId => _serverInstanceId;
         public int BoundPort => _boundPort;
         public bool IsRunning => _listener != null && _listener.IsListening;
+        public McpRegistry Registry => _registry;
+        public OpRegistry Ops => _ops;
 
         private void Awake()
         {
@@ -87,9 +92,30 @@ namespace MuMech.Mcp
             string auditPath = Path.Combine(logDir, "mechjeb-mcp-audit.log");
             _audit = new McpAuditLog(auditPath);
 
-            // Phase 1: register dev_ping only. Later phases extend this list.
+            // Reflection scan: build the attribute-driven capability registry.
+            var asms = new List<Assembly>();
+            foreach (Assembly a in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                string n = a.GetName().Name;
+                if (n == "MechJeb2" || n == "MechJebLib") asms.Add(a);
+            }
+            _registry = McpRegistry.Scan(asms);
+
+            // Op registry: subscribes to GameEvents so scene/vessel changes
+            // abort running handles synchronously.
+            _ops = new OpRegistry();
+            _ops.SubscribeEvents();
+
+            // Top-level tool surface.
             var tools = new List<JsonRpcTransport.ToolDefinition>();
             tools.Add(BuildDevPingTool());
+            tools.Add(Tools.Status(_registry, _ops, () => _serverInstanceId));
+            tools.Add(Tools.Discover(_registry, () => _serverInstanceId));
+            tools.Add(Tools.Invoke(_registry, _ops));
+            tools.Add(Tools.Read(_registry));
+            tools.Add(Tools.Cancel(_ops));
+            tools.Add(Tools.OpsList(_ops));
+            tools.Add(Tools.OpsStatus(_ops));
 
             _transport = new JsonRpcTransport(tools, _audit, _settings, () => _serverInstanceId);
 
@@ -112,8 +138,17 @@ namespace MuMech.Mcp
             _acceptTask = Task.Run(() => AcceptLoopAsync(_cts.Token));
 
             Debug.Log(string.Format(
-                "[MechJeb-MCP] Listening on http://127.0.0.1:{0}/mcp/ (instance {1}). Awake total {2}ms.",
-                _boundPort, _serverInstanceId, sw.ElapsedMilliseconds));
+                "[MechJeb-MCP] Listening on http://127.0.0.1:{0}/mcp/ (instance {1}, commands={2}, properties={3}). Awake total {4}ms.",
+                _boundPort, _serverInstanceId, _registry.CommandCount, _registry.PropertyCount, sw.ElapsedMilliseconds));
+        }
+
+        // FixedUpdate drives the OpRegistry poll loop: queued long-running ops
+        // expose IsDone on the main thread, and we transition handles to
+        // terminal state from here so HTTP-thread polls observe a coherent
+        // status.
+        private void FixedUpdate()
+        {
+            _ops?.Poll();
         }
 
         private HttpListener TryStartListener(int basePort, int range, out int boundPort)
@@ -219,6 +254,7 @@ namespace MuMech.Mcp
             }
             catch { }
 
+            try { _ops?.Dispose(); } catch { }
             try { _audit?.Dispose(); } catch { }
 
             _listener = null;
@@ -226,6 +262,8 @@ namespace MuMech.Mcp
             _cts?.Dispose();
             _cts = null;
             _audit = null;
+            _ops = null;
+            _registry = null;
 
             Debug.Log("[MechJeb-MCP] Stopped.");
         }
