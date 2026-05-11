@@ -91,10 +91,19 @@ namespace MuMech.Mcp
 
             try
             {
-                // We have to peek at the method before deciding whether the
-                // request is initialize (which skips the MCP-Protocol-Version
-                // requirement). Read body first.
-                string body = ReadBody(context.Request);
+                // Pre-flight: cap body size even when the client uses
+                // Transfer-Encoding: chunked (ContentLength64 = -1).
+                // HttpAccessControl.Evaluate's ContentLength64 check only fires
+                // when the length is known; chunked bypasses it.
+                if (!TryReadBody(context.Request, HttpAccessControl.MaxBodyBytes, out string body))
+                {
+                    context.Response.StatusCode = 413;
+                    WriteJsonBody(context.Response, new JsonObject()
+                        .Set("error", new JsonObject()
+                            .Set("code", "PAYLOAD_TOO_LARGE")
+                            .Set("message", "Request body exceeds " + HttpAccessControl.MaxBodyBytes + " bytes")));
+                    return;
+                }
                 if (body.Length == 0)
                 {
                     WriteJsonRpcError(context, null, JsonRpcErrorCode.ParseError, "Empty request body");
@@ -163,7 +172,10 @@ namespace MuMech.Mcp
                         break;
                     case "notifications/initialized":
                         // No id, no response (it's a notification). 202 Accepted per spec.
+                        // Set ContentLength64 = 0 so HTTP/1.1 keep-alive clients don't
+                        // stall waiting for a body that will never arrive.
                         context.Response.StatusCode = 202;
+                        context.Response.ContentLength64 = 0;
                         return;
                     case "tools/list":
                         resultValue = _toolsListPrebuilt();
@@ -337,12 +349,29 @@ namespace MuMech.Mcp
                 .Set("additionalProperties", false);
         }
 
-        private static string ReadBody(HttpListenerRequest req)
+        // Reads the request body with a hard byte cap, regardless of whether
+        // the client supplied Content-Length or used chunked transfer encoding.
+        // Returns false (without consuming the full body) if the cap is hit.
+        private static bool TryReadBody(HttpListenerRequest req, int maxBytes, out string body)
         {
-            using (var sr = new StreamReader(req.InputStream,
-                req.ContentEncoding ?? Encoding.UTF8, detectEncodingFromByteOrderMarks: false))
+            body = null;
+            // Fast reject if Content-Length is declared and exceeds cap.
+            long declared = req.ContentLength64;
+            if (declared > maxBytes) return false;
+
+            Encoding encoding = req.ContentEncoding ?? Encoding.UTF8;
+            int bufSize = Math.Min(8192, maxBytes);
+            var buf = new byte[bufSize];
+            using (var ms = new MemoryStream(declared > 0 ? (int)declared : bufSize))
             {
-                return sr.ReadToEnd();
+                int n;
+                while ((n = req.InputStream.Read(buf, 0, buf.Length)) > 0)
+                {
+                    if (ms.Length + n > maxBytes) return false;
+                    ms.Write(buf, 0, n);
+                }
+                body = encoding.GetString(ms.GetBuffer(), 0, (int)ms.Length);
+                return true;
             }
         }
 

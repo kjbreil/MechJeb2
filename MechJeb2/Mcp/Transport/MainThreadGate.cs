@@ -1,22 +1,22 @@
 using System;
-using System.Threading;
+using System.Threading.Tasks;
 using UnityToolbag;
 
 namespace MuMech.Mcp
 {
     // Marshals HTTP-thread work onto Unity's main thread via the existing
-    // MechJeb2/UnityToolbag/Dispatcher. Uses ManualResetEventSlim with a
-    // short spin tail to keep cost ~zero when the main thread services the
-    // queue within a frame or two (the common case), and a true kernel wait
-    // for the deadline path.
+    // MechJeb2/UnityToolbag/Dispatcher.
     //
     // Why not Dispatcher.Invoke directly: the existing Invoke uses
-    // Thread.Sleep(5) polling — 10-15ms latency floor on Mono. We use
-    // InvokeAsync and our own event for the completion signal.
+    // Thread.Sleep(5) polling — 10-15ms latency floor on Mono.
     //
-    // Why not async/await + TaskCompletionSource: minimizes allocations in
-    // the hot path; the HTTP listener thread that calls this can block
-    // synchronously since it's already paying for one request.
+    // Implementation uses TaskCompletionSource because it has no disposal
+    // contract: on timeout, the still-queued Dispatcher action will eventually
+    // run on the main thread and call TrySetResult(...) which is safe even if
+    // nobody is awaiting the Task anymore. (An earlier ManualResetEventSlim
+    // version raced: disposing the MRE in the timeout branch while the
+    // queued action held a live reference led to ObjectDisposedException on
+    // the Unity main thread.)
     public static class MainThreadGate
     {
         public const int DefaultTimeoutMs = 5_000;
@@ -51,24 +51,34 @@ namespace MuMech.Mcp
                 return result;
             }
 
-            using (var done = new ManualResetEventSlim(false, spinCount: 10))
-            {
-                Dispatcher.InvokeAsync(() =>
-                {
-                    try { result.Value = fn(); }
-                    catch (Exception ex) { result.Error = ex; }
-                    finally { result.Completed = true; done.Set(); }
-                });
+            // RunContinuationsAsynchronously: defensive choice in case a future
+            // caller awaits this Task — otherwise the continuation would run
+            // synchronously on whichever thread called TrySetResult (in our
+            // case, Unity's main thread), pulling HTTP-response writes onto
+            // the main thread and blocking the next game frame.
+            var tcs = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
 
-                if (!done.Wait(timeoutMs))
+            Dispatcher.InvokeAsync(() =>
+            {
+                try { result.Value = fn(); }
+                catch (Exception ex) { result.Error = ex; }
+                finally
                 {
-                    result.TimedOut = true;
-                    // Note: the action remains queued in the Dispatcher and will
-                    // still execute on the next main-thread tick. The caller
-                    // observes a timeout; we let the action run to completion
-                    // rather than try to cancel it (the existing Dispatcher has
-                    // no cancellation token concept).
+                    result.Completed = true;
+                    // TrySet is safe even after the HTTP thread gave up; no
+                    // exception is raised in the "nobody's waiting" case.
+                    tcs.TrySetResult(true);
                 }
+            });
+
+            if (!tcs.Task.Wait(timeoutMs))
+            {
+                result.TimedOut = true;
+                // The queued action remains in the Dispatcher's queue and will
+                // run on the next main-thread tick. We just stopped waiting.
+                // The action's TrySetResult is safe; result.Completed will be
+                // set after the fact (observable for future polling, though
+                // Phase 1 doesn't poll).
             }
 
             return result;

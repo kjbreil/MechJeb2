@@ -324,6 +324,20 @@ namespace MuMech.Mcp
                     }
                 }
                 else if (c < 0x20) throw new JsonException("Unescaped control character in string", Line, Column);
+                else if (c >= 0xD800 && c <= 0xDBFF)
+                {
+                    // High surrogate — must be immediately followed by a low surrogate
+                    // (the C# string layer may have decoded a valid UTF-8 4-byte sequence
+                    // into a UTF-16 pair). Lone surrogates are rejected per RFC 8259 §8.2.
+                    sb.Append(c); Advance();
+                    if (IsAtEnd) throw new JsonException("Lone high surrogate at end of string", Line, Column);
+                    char low = _src[_pos];
+                    if (low < 0xDC00 || low > 0xDFFF)
+                        throw new JsonException("High surrogate not followed by low surrogate", Line, Column);
+                    sb.Append(low); Advance();
+                }
+                else if (c >= 0xDC00 && c <= 0xDFFF)
+                    throw new JsonException("Lone low surrogate in string", Line, Column);
                 else { sb.Append(c); Advance(); }
             }
             throw new JsonException("Unterminated string", Line, Column);
@@ -350,8 +364,13 @@ namespace MuMech.Mcp
         {
             int start = _pos;
             if (Peek() == '-') Advance();
-            // integer part
-            if (Peek() == '0') Advance();
+            // integer part — leading zeros are forbidden per RFC 8259 §6
+            if (Peek() == '0')
+            {
+                Advance();
+                if (!IsAtEnd && _src[_pos] >= '0' && _src[_pos] <= '9')
+                    throw new JsonException("Leading zeros not allowed in number", Line, Column);
+            }
             else if (Peek() >= '1' && Peek() <= '9')
             {
                 while (!IsAtEnd && _src[_pos] >= '0' && _src[_pos] <= '9') Advance();
