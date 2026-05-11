@@ -229,6 +229,18 @@ namespace MuMech.Mcp
                     if (sceneErr != null)
                         return JsonRpcTransport.ToolError(ErrorCode.WrongScene, sceneErr);
 
+                    // Time-warp gate.
+                    if (binding.MaxTimeWarpRate > 0)
+                    {
+                        double currentRate = 1.0;
+                        try { currentRate = TimeWarp.CurrentRate; } catch { }
+                        if (currentRate > binding.MaxTimeWarpRate)
+                            return JsonRpcTransport.ToolError(ErrorCode.WarpTooHigh,
+                                "WARP_TOO_HIGH: current rate " + currentRate + "× exceeds " +
+                                binding.MaxTimeWarpRate + "× max for '" + path + "'. " +
+                                "Call mj_invoke with path='warp/set' (when available) or lower warp in-game and retry.");
+                    }
+
                     // Argument binding.
                     if (!ArgumentBinder.TryBind(binding.Parameters, callArgs, out object[] bound, out string bindErr))
                         return JsonRpcTransport.ToolError(ErrorCode.SchemaInvalid, bindErr + " (path=" + path + ")");

@@ -19,9 +19,11 @@ namespace MuMech.Mcp
 
         [McpCommand("autopilot/ascent/engage",
             Description = "Engage the ascent autopilot. Optionally switch type (CLASSIC/PSG) before engaging. " +
-                          "Returns a handle; poll mj_ops_status.",
+                          "Returns a handle; poll mj_ops_status. Refuses WARP_TOO_HIGH if time-warp > 1× " +
+                          "(ascent needs physical time).",
             SideEffect = SideEffect.MutatingLongRunning,
             RequiredScenes = "FLIGHT",
+            MaxTimeWarpRate = 1.0,
             Version = "1.0.0")]
         public static IRunningOp Engage(
             [McpParam(Description = "Override the AscentType (CLASSIC or PSG); omit to use the current setting.",

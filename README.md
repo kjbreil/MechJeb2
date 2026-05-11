@@ -20,6 +20,7 @@ info, [visit this KSP forum post][post].
         - [Via CKAN](#via-ckan)
             - [Development version of Mechjeb](#development-version-of-mechjeb)
     - [Common Issues](#common-issues)
+    - [MCP server (LLM piloting)](#mcp-server-llm-piloting)
     - [Development](#development)
         - [Maintainers](#maintainers)
         - [Code Standards](#code-standards)
@@ -92,6 +93,18 @@ If you want the unstable dev version of MechJeb then :
    **If you cannot find the problem**, get
    a [log](https://forum.kerbalspaceprogram.com/index.php?/topic/83212-how-to-get-support-read-first/#Logs) and create a
    new issue with a descriptive title of the problem.
+
+## MCP server (LLM piloting)
+
+MechJeb2 ships with an opt-in [Model Context Protocol](https://modelcontextprotocol.io) HTTP server,
+so an LLM client (Claude Code, Claude Desktop, Cursor, etc.) can drive the autopilots, read the active
+vessel, search logs, and manage save games as a piloting copilot.
+
+- **Disabled by default.** Toggle `enabled = True` in
+  `<KspDir>/GameData/MechJeb2/Plugins/PluginData/MechJeb2/mcp_settings.cfg` and restart KSP.
+- **Loopback only.** Binds to `127.0.0.1` with Host-header + Origin checks; no auth token by default.
+- See **[docs/mcp/README.md](docs/mcp/README.md)** for setup, the tool surface, and what you can do today.
+- See **[docs/mcp/PROTOCOL.md](docs/mcp/PROTOCOL.md)** for the wire spec.
 
 ## Development
 
@@ -175,3 +188,29 @@ Licensed under the [GNU General Public License, Version 3](LICENSE.md).
 
 Portions (in the "MechJebLib" directory) are placed in the public domain and are documented in
 the affected source code headers.
+
+<!-- agents:project-docs:start -->
+## Using agents in this repository
+
+This repository uses `@agents-dev/cli` to keep MCP servers, skills, and instructions aligned across AI tools.
+
+### Quick commands
+
+```bash
+agents status
+agents mcp add <url-or-name>
+agents mcp test --runtime
+agents sync
+agents sync --check
+```
+
+### One MCP setup for all tools
+
+Add a server once in `.agents/agents.json`, then run `agents sync` to materialize it for enabled integrations.
+
+### References
+
+- MCP Protocol Docs: https://modelcontextprotocol.io
+- MCP servers catalog: https://mcpservers.org
+- Project examples: `docs/EXAMPLES.md`
+<!-- agents:project-docs:end -->

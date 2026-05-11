@@ -30,6 +30,7 @@ namespace MuMech.Mcp
             public string ReplacedBy;
             public int MainThreadTimeoutMs;
             public GameScenes[] RequiredScenes;
+            public double MaxTimeWarpRate;
             public bool ReturnsHandle;
 
             public bool IsMutating => SideEffect != SideEffect.ReadOnly;
@@ -289,6 +290,7 @@ namespace MuMech.Mcp
                 ReplacedBy = attr.ReplacedBy,
                 MainThreadTimeoutMs = attr.MainThreadTimeoutMs,
                 RequiredScenes = ParseScenes(attr.RequiredScenes),
+                MaxTimeWarpRate = attr.MaxTimeWarpRate,
                 ReturnsHandle = returnsHandle,
             };
 

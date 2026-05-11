@@ -54,6 +54,15 @@ namespace MuMech.Mcp
         /// </summary>
         public string RequiredScenes { get; set; } = "";
 
+        /// <summary>
+        /// Maximum time-warp rate allowed when invoking this command.
+        /// 0 (default) = no limit. Set to 1 to forbid all warping, 4 to allow
+        /// physical warp only, 1000+ to allow on-rails warp. The current
+        /// TimeWarp.CurrentRate is checked at dispatch; exceeding returns
+        /// WARP_TOO_HIGH.
+        /// </summary>
+        public double MaxTimeWarpRate { get; set; }
+
         public McpCommandAttribute(string path) { Path = path; }
     }
 
