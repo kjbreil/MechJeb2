@@ -72,7 +72,10 @@ echo "--- negative: malformed JSON (expect JSON-RPC parse error) ---"
 post '{this is not json}'
 echo
 
-echo "--- negative: wrong Host header (expect 403) ---"
+echo "--- negative: wrong Host header (expect 400 from HttpListener prefix check, or 403 from our HttpAccessControl) ---"
+# Either status is correct — both indicate the request was rejected. HttpListener
+# does its own Host check against the registered prefix; only requests whose
+# Host matches the prefix even reach our handler.
 curl -sS -o /dev/null -w "HTTP %{http_code}\n" \
   -H "Content-Type: application/json" -H "Accept: application/json" \
   -H "MCP-Protocol-Version: $PROTO" -H "Host: evil.example" \

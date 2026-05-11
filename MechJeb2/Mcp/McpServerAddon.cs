@@ -296,11 +296,16 @@ namespace MuMech.Mcp
                         echo = ev.AsString;
 
                     string instance = Instance != null ? Instance._serverInstanceId : "(no instance)";
+                    string kspRoot = KSPUtil.ApplicationRootPath ?? "";
+                    // ApplicationRootPath includes literal "../.." segments on
+                    // macOS bundle layouts; normalize so callers see a clean path.
+                    try { if (kspRoot.Length > 0) kspRoot = Path.GetFullPath(kspRoot); }
+                    catch { /* if normalization fails, fall back to the raw string */ }
                     var result = new JsonObject()
                         .Set("pong", true)
                         .Set("server_instance_id", instance)
                         .Set("server_version", JsonRpcTransport.ServerVersion)
-                        .Set("ksp_root", KSPUtil.ApplicationRootPath ?? "");
+                        .Set("ksp_root", kspRoot);
                     if (echo != null) result.Set("echo", echo);
                     return JsonRpcTransport.Ok(result);
                 },
