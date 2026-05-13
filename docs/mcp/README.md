@@ -69,6 +69,7 @@ Eight top-level MCP tools. The capability tree behind them is grown via attribut
 ## What you can do today (v1.0.0-phase6)
 
 - **Inspect the vessel** — `mj_invoke vessel/summary` returns mass, TWR, orbit, control state, per-resource totals, per-stage ΔV and burn-time (via MechJeb's StageStats). Pass `include_parts:true` for the full part list.
+- **Science guidance** — `science/totals`, `science/earned`, `science/here`, `science/next_easy`, and `science/opportunities` expose read-only R&D history, active-vessel science available here, and ranked easy next science. The in-game MechJeb menu also has a flight-only **Science** window showing the same current-location and next-easy data.
 - **System orientation** — `mj_invoke system/bodies` returns the solar system. `mj_invoke vessels/loaded` lists loadable target vessels.
 - **Launch to orbit** — set `autopilot/ascent/desired_orbit_altitude_m` and `desired_inclination_deg`, then `mj_invoke autopilot/ascent/engage`. Poll the returned handle. Refuses WARP_TOO_HIGH if you forgot to drop warp.
 - **Plan maneuvers** — `maneuver/circularize_at_apoapsis`, `maneuver/change_apoapsis`, `maneuver/change_periapsis`, `maneuver/change_inclination`, `maneuver/clear_nodes`. Each places a single node.
@@ -95,6 +96,14 @@ cd <repo>/scripts/mcp && ./smoke.sh
 ```
 
 Auto-discovers the bound URL from `mcp-endpoint.json` and runs through `initialize` / `tools/list` / `tools/call dev_ping` plus negative cases (bad JSON, wrong Host, missing protocol version, wrong content type).
+
+For science guidance, start KSP in a flight scene in career or science mode and run:
+
+```
+cd <repo>/scripts/mcp && ./smoke-science.sh
+```
+
+This checks `mj_discover science`, `science/totals`, `science/earned`, `science/here`, and `science/next_easy`.
 
 ## Related docs
 

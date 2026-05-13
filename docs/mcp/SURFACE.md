@@ -21,6 +21,9 @@
 This is a hand-summarized index of paths registered at the time of release. Use `mj_discover` from a
 live client to get the full, current input/output schemas — those are not duplicated here.
 
+The same shared science-query logic also powers the flight-only in-game MechJeb **Science** window.
+It is read-only and appears in the normal MechJeb menu in flight, not in the editor.
+
 ### Commands
 
 | Path | Side effect | Required scene | Description |
@@ -59,6 +62,11 @@ live client to get the full, current input/output schemas — those are not dupl
 | `saves/delete` | Mutating | (any) | Delete a save (rename-to-trash). |
 | `saves/load` | Mutating | (any) | Load a save. `force:true` re-checks ClearToSave after disengaging MCP. |
 | `saves/quickload` | Mutating | FLIGHT | Quickload. |
+| `science/totals` | ReadOnly | (any) | Campaign science earned across all R&D subjects, broken down by body. Sandbox returns zeros with `mode=sandbox`. |
+| `science/earned` | ReadOnly | (any) | Collected subjects with parsed `body`, `situation`, `biome`, `experiment_id`, earned/cap/remaining, optional body and experiment filters, and capped results. |
+| `science/here` | ReadOnly | FLIGHT | Active-vessel body/situation/biome, onboard experiments, and remaining science runnable at the current location. |
+| `science/next_easy` | ReadOnly | FLIGHT | Ranked easy active-vessel recommendations: runnable now first, then same-body local/situation changes. |
+| `science/opportunities` | ReadOnly | (any) | Broader per-body/per-situation science atlas. Accounting tracks earned science per experiment/body/situation/biome. |
 | `dev/dump_surface` | ReadOnly | (any) | Dump every registered command and property as a flat list. Used to regenerate this doc. |
 
 ### Properties
