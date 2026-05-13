@@ -13,7 +13,32 @@ namespace MuMech.Mcp
     {
         public const string EndpointPath = "/mcp/";
         public const int MaxBodyBytes = 1 * 1024 * 1024; // 1MB
-        public const string McpProtocolVersion = "2025-06-18";
+        // Latest protocol revision we implement on the wire. Sent back from
+        // `initialize` when the client requests a version we don't recognize.
+        public const string McpProtocolVersion = "2025-11-25";
+
+        // Protocol revisions we accept on the `MCP-Protocol-Version` header for
+        // post-initialize requests. The JSON-RPC subset we implement
+        // (initialize, tools/list, tools/call, notifications/initialized) is
+        // stable across these revisions, so accepting newer versions lets us
+        // serve current Claude Code / Codex clients without code changes for
+        // each spec bump. Add new revisions here as they ship.
+        private static readonly string[] SupportedProtocolVersions = new[]
+        {
+            "2025-06-18",
+            McpProtocolVersion,
+        };
+
+        public static bool IsSupportedProtocolVersion(string version)
+        {
+            if (string.IsNullOrEmpty(version)) return false;
+            for (int i = 0; i < SupportedProtocolVersions.Length; i++)
+            {
+                if (SupportedProtocolVersions[i].Equals(version, StringComparison.Ordinal))
+                    return true;
+            }
+            return false;
+        }
 
         public sealed class Decision
         {
@@ -131,7 +156,7 @@ namespace MuMech.Mcp
                     d.ErrorCode = ErrorCode.ProtocolVersionMissing;
                     return d;
                 }
-                if (!protoVer.Equals(McpProtocolVersion, StringComparison.Ordinal))
+                if (!IsSupportedProtocolVersion(protoVer))
                 {
                     d.RejectStatus = 400;
                     d.RejectReason = "Unsupported MCP-Protocol-Version: " + protoVer;

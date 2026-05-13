@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using KSP.UI.Screens;
 
 namespace MuMech.Mcp
 {
@@ -99,6 +100,105 @@ namespace MuMech.Mcp
                 time_to_periapsis_s = o.timeToPe,
                 body = v.mainBody.bodyName ?? "?",
             };
+        }
+
+        [McpCommand("vessel/set_action_group",
+            Description = "Toggle a stock action group on or off. Names: SAS, RCS, GEAR, BRAKES, LIGHTS, " +
+                          "ABORT, STAGE, CUSTOM01-CUSTOM10. RCS is the common one needed when reaction-wheel " +
+                          "torque is insufficient (small probes); enable before maneuver burns that require " +
+                          "fast attitude changes.",
+            SideEffect = SideEffect.Mutating,
+            RequiredScenes = "FLIGHT",
+            Version = "1.0.0")]
+        public static JsonObject SetActionGroup(
+            [McpParam(Description = "Action group name.",
+                EnumValues = new[] { "SAS", "RCS", "GEAR", "BRAKES", "LIGHTS", "ABORT", "STAGE",
+                    "CUSTOM01", "CUSTOM02", "CUSTOM03", "CUSTOM04", "CUSTOM05",
+                    "CUSTOM06", "CUSTOM07", "CUSTOM08", "CUSTOM09", "CUSTOM10" })]
+            string group,
+            [McpParam(Description = "True to activate, false to deactivate.")]
+            bool enabled)
+        {
+            Vessel v = FlightGlobals.ActiveVessel;
+            if (v == null) throw new McpException(ErrorCode.NoVessel, "No active vessel");
+            if (!System.Enum.TryParse<KSPActionGroup>(group, true, out KSPActionGroup ag))
+                throw new McpException(ErrorCode.SchemaInvalid, "Unknown action group: " + group);
+            v.ActionGroups.SetGroup(ag, enabled);
+            return new JsonObject()
+                .Set("group", group)
+                .Set("enabled", v.ActionGroups[ag]);
+        }
+
+        [McpCommand("vessel/warp_to_ut",
+            Description = "Time-warp to a specific universal time (seconds). Uses MechJeb's Warp controller, " +
+                          "which picks high warp during atmosphere-free coast and drops to 1× near the target. " +
+                          "Returns immediately; poll vessel/time_warp_rate or wait for the simulation to reach " +
+                          "the target UT. Refuses if target_ut is in the past.",
+            SideEffect = SideEffect.Mutating,
+            RequiredScenes = "FLIGHT",
+            Version = "1.0.0")]
+        public static JsonObject WarpToUT(
+            [McpParam(Description = "Target universal time in seconds.")] double target_ut)
+        {
+            Vessel v = FlightGlobals.ActiveVessel;
+            if (v == null) throw new McpException(ErrorCode.NoVessel, "No active vessel");
+            double now = Planetarium.GetUniversalTime();
+            if (target_ut <= now)
+                throw new McpException(ErrorCode.SchemaInvalid, "target_ut " + target_ut + " is not in the future (now=" + now + ")");
+            MechJebCore core = v.GetMasterMechJeb();
+            if (core?.Warp == null) throw new McpException(ErrorCode.Internal, "MechJeb Warp controller unavailable");
+            core.Warp.WarpToUT(target_ut);
+            return new JsonObject()
+                .Set("warping", true)
+                .Set("now_ut", now)
+                .Set("target_ut", target_ut)
+                .Set("delta_s", target_ut - now);
+        }
+
+        [McpCommand("vessel/warp_to_soi_change",
+            Description = "Time-warp to the next SOI transition (orbit.EndUT) plus an optional margin. " +
+                          "Used after a transfer burn to fast-forward into the destination body's SOI. " +
+                          "Refuses if the current orbit has no upcoming SOI change.",
+            SideEffect = SideEffect.Mutating,
+            RequiredScenes = "FLIGHT",
+            Version = "1.0.0")]
+        public static JsonObject WarpToSoiChange(
+            [McpParam(Description = "Seconds past the SOI boundary to stop. Default 30s.")] double margin_s = 30.0)
+        {
+            Vessel v = FlightGlobals.ActiveVessel;
+            if (v == null) throw new McpException(ErrorCode.NoVessel, "No active vessel");
+            if (v.orbit == null || v.orbit.patchEndTransition == Orbit.PatchTransitionType.FINAL)
+                throw new McpException(ErrorCode.SchemaInvalid, "Current orbit has no upcoming SOI change");
+            double targetUT = v.orbit.EndUT + margin_s;
+            MechJebCore core = v.GetMasterMechJeb();
+            if (core?.Warp == null) throw new McpException(ErrorCode.Internal, "MechJeb Warp controller unavailable");
+            core.Warp.WarpToUT(targetUT);
+            string nextBody = v.orbit.nextPatch?.referenceBody?.bodyName ?? "?";
+            return new JsonObject()
+                .Set("warping", true)
+                .Set("target_ut", targetUT)
+                .Set("transition", v.orbit.patchEndTransition.ToString())
+                .Set("next_reference_body", nextBody);
+        }
+
+        [McpCommand("vessel/stage",
+            Description = "Fire the next stage on the active vessel (releases launch clamps, ignites SRBs, " +
+                          "drops empties). Equivalent to pressing space in-flight. MechJeb's ascent autopilot " +
+                          "will not stage off the pad on its own — call this once at T+0 if autostage is on, " +
+                          "and it'll take over for subsequent stages.",
+            SideEffect = SideEffect.Mutating,
+            RequiredScenes = "FLIGHT",
+            Version = "1.0.0")]
+        public static JsonObject Stage()
+        {
+            Vessel v = FlightGlobals.ActiveVessel;
+            if (v == null) throw new McpException(ErrorCode.NoVessel, "No active vessel");
+            int before = StageManager.CurrentStage;
+            StageManager.ActivateNextStage();
+            return new JsonObject()
+                .Set("staged", true)
+                .Set("stage_before", before)
+                .Set("stage_after", StageManager.CurrentStage);
         }
 
         private static List<ResourceDto> BuildResources(Vessel v)

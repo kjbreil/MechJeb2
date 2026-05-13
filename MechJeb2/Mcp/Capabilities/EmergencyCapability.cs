@@ -18,7 +18,8 @@ namespace MuMech.Mcp
             MechJebCore core = AscentCapability.ResolveMaster();
             MechJebModuleTranslatron tr = core.GetComputerModule<MechJebModuleTranslatron>();
             if (tr == null) throw new McpException(ErrorCode.Internal, "Translatron module not present");
-            if (tr.Hidden) throw new McpException(ErrorCode.ModuleHidden, "Translatron is hidden");
+            // Hidden=true in career mode means the player hasn't unlocked it via R&D, but MCP
+            // operates outside the UI gate — the module is loaded and functional regardless.
             tr.PanicSwitch();
             return new JsonObject().Set("panicked", true);
         }

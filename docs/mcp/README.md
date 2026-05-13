@@ -1,6 +1,6 @@
 # MechJeb MCP Server
 
-An in-process HTTP MCP (Model Context Protocol) server hosted inside the MechJeb2 KSP mod. Lets an LLM client (Claude Code, Claude Desktop, Cursor, anything that speaks MCP 2025-06-18 over Streamable HTTP) drive MechJeb's autopilots, inspect the active vessel, search logs, and manage save games.
+An in-process HTTP MCP (Model Context Protocol) server hosted inside the MechJeb2 KSP mod. Lets an LLM client (Claude Code, Claude Desktop, Cursor, anything that speaks MCP 2025-11-25 or 2025-06-18 over Streamable HTTP) drive MechJeb's autopilots, inspect the active vessel, search logs, and manage save games.
 
 **Disabled by default.** Opt-in flip required before anything binds.
 

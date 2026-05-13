@@ -18,7 +18,7 @@ namespace MuMech.Mcp
     // end-to-end; the full tool surface (mj_status / mj_discover / mj_invoke
     // / mj_read / mj_logs / mj_cancel / mj_ops_*) lands in later phases.
     //
-    // Per MCP 2025-06-18 spec:
+    // Per MCP 2025-11-25 spec:
     //   * tool execution failures → result.isError:true (NOT a JSON-RPC error).
     //   * protocol-layer failures → JSON-RPC error envelope.
     //   * tool result content is both `structuredContent` (typed) AND a text
@@ -91,6 +91,19 @@ namespace MuMech.Mcp
 
             try
             {
+                // Method check FIRST — before reading body — so GET / DELETE /
+                // OPTIONS get a clean 405. Claude Code's Streamable HTTP client
+                // probes the endpoint with GET to try to open an SSE stream;
+                // returning a 200 with a JSON error body confuses it. Per spec
+                // and matching mcp.context7.com behavior, non-POST → 405.
+                if (!context.Request.HttpMethod.Equals("POST", StringComparison.Ordinal))
+                {
+                    context.Response.StatusCode = 405;
+                    context.Response.Headers["Allow"] = "POST";
+                    context.Response.ContentLength64 = 0;
+                    return;
+                }
+
                 // Pre-flight: cap body size even when the client uses
                 // Transfer-Encoding: chunked (ContentLength64 = -1).
                 // HttpAccessControl.Evaluate's ContentLength64 check only fires
@@ -205,13 +218,18 @@ namespace MuMech.Mcp
 
         private JsonObject HandleInitialize(JsonObject paramsObj, HttpListenerResponse response)
         {
-            // MCP spec 2025-06-18: mirror the client's protocolVersion (or send
-            // ours if theirs is missing). We claim only the `tools` capability
-            // at this phase.
+            // MCP spec: if the client's requested protocolVersion is one we
+            // support, mirror it. Otherwise advertise our latest supported
+            // version so the client can decide whether to continue or disconnect.
+            // (Previously we mirrored unconditionally, which caused clients to
+            // send `MCP-Protocol-Version: <unsupported>` on every follow-up call,
+            // which the access-control layer then rejected — self-inflicted.)
             string clientProtoVer = paramsObj != null
                 ? (paramsObj.TryGet("protocolVersion", out JsonValue pv) && pv.Type == JsonType.String ? pv.AsString : null)
                 : null;
-            string negotiated = clientProtoVer ?? HttpAccessControl.McpProtocolVersion;
+            string negotiated = HttpAccessControl.IsSupportedProtocolVersion(clientProtoVer)
+                ? clientProtoVer
+                : HttpAccessControl.McpProtocolVersion;
 
             // Session: emit Mcp-Session-Id header (Type-4 random GUID).
             string sessionId = Guid.NewGuid().ToString("N");
@@ -284,7 +302,7 @@ namespace MuMech.Mcp
 
         private static JsonObject BuildToolResultEnvelope(ToolResult result)
         {
-            // Per MCP 2025-06-18: return BOTH structuredContent AND a text
+            // Per MCP 2025-11-25: return BOTH structuredContent AND a text
             // mirror containing the JSON, for backward compat with older
             // clients that only read content[].
             JsonValue payload = result.IsError

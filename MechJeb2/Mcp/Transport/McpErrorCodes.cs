@@ -79,7 +79,7 @@ namespace MuMech.Mcp
 
     // JSON-RPC 2.0 error codes. Used for *protocol-layer* failures (parse,
     // invalid request, method-not-found). Tool execution failures flow via
-    // result.isError:true, NOT as JSON-RPC errors, per MCP spec 2025-06-18.
+    // result.isError:true, NOT as JSON-RPC errors, per MCP spec 2025-11-25.
     public static class JsonRpcErrorCode
     {
         public const int ParseError = -32700;

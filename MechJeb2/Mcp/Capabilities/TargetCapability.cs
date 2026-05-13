@@ -67,7 +67,9 @@ namespace MuMech.Mcp
                 if (v != null && v.persistentId == persistent_id) { match = v; break; }
             }
             if (match == null) throw new McpException(ErrorCode.NameNotFound, "No vessel with persistent_id " + persistent_id);
-            FlightGlobals.fetch.SetVesselTarget(match);
+            // overrideInputLock=true — default false is silently rejected when
+            // the scene has any input lock active (very common).
+            FlightGlobals.fetch.SetVesselTarget(match, true);
             return Current();
         }
 
@@ -85,7 +87,9 @@ namespace MuMech.Mcp
                 { match = b; break; }
             }
             if (match == null) throw new McpException(ErrorCode.NameNotFound, "No body named " + body_name);
-            FlightGlobals.fetch.SetVesselTarget(match);
+            // overrideInputLock=true — default false is silently rejected when
+            // the scene has any input lock active (very common).
+            FlightGlobals.fetch.SetVesselTarget(match, true);
             return Current();
         }
 
@@ -121,6 +125,92 @@ namespace MuMech.Mcp
                     body = v.mainBody?.bodyName ?? "?",
                     is_active = v.persistentId == activeId,
                 });
+            }
+            return result;
+        }
+        public sealed class AsteroidDto
+        {
+            public uint persistent_id;
+            public string name;
+            public string body;                  // current parent body (usually Sun)
+            public double mass_t;                // approximate mass in tonnes
+            public string size_class;            // A..E classification by mass
+            public double sma_m;                 // heliocentric semi-major axis
+            public double eccentricity;
+            public double inclination_deg;
+            public double apoapsis_m;
+            public double periapsis_m;
+            public double period_s;
+            public double closest_kerbin_approach_ut;     // UT of next closest approach to Kerbin
+            public double closest_kerbin_approach_dist_m; // distance (m) at that UT
+            public bool will_enter_kerbin_soi;            // true if approach distance < Kerbin SOI
+            public double t_minus_s;                      // seconds from now to closest approach
+        }
+
+        [McpCommand("tracking/list_asteroids",
+            Description = "List all tracked asteroids (SpaceObject-type vessels). For each, computes the next " +
+                          "closest approach to Kerbin and flags whether that pass enters Kerbin's SOI " +
+                          "(the asteroid is capturable in the next pass). Use this to find a Kerbin-encounter " +
+                          "asteroid for a capture/grappling mission.",
+            SideEffect = SideEffect.ReadOnly,
+            Version = "1.0.0")]
+        public static List<AsteroidDto> ListAsteroids()
+        {
+            var result = new List<AsteroidDto>();
+            if (FlightGlobals.Vessels == null) return result;
+            CelestialBody kerbin = null;
+            foreach (CelestialBody b in FlightGlobals.Bodies)
+            {
+                if (b != null && b.bodyName == "Kerbin") { kerbin = b; break; }
+            }
+            double now = Planetarium.GetUniversalTime();
+            foreach (Vessel v in FlightGlobals.Vessels)
+            {
+                if (v == null || v.vesselType != VesselType.SpaceObject) continue;
+                Orbit o = v.orbit;
+                var dto = new AsteroidDto
+                {
+                    persistent_id = v.persistentId,
+                    name = v.GetDisplayName() ?? v.vesselName ?? "?",
+                    body = v.mainBody?.bodyName ?? "?",
+                    mass_t = v.GetTotalMass(),
+                };
+                // Size class by mass (KSP stock):
+                //  A: ~3-10t, B: ~20-50t, C: ~100-300t, D: ~600-1500t, E: ~3000-5000t
+                double m = dto.mass_t;
+                dto.size_class = m < 20 ? "A" : m < 100 ? "B" : m < 600 ? "C" : m < 3000 ? "D" : "E";
+                if (o != null)
+                {
+                    dto.sma_m = o.semiMajorAxis;
+                    dto.eccentricity = o.eccentricity;
+                    dto.inclination_deg = o.inclination;
+                    dto.apoapsis_m = o.ApR;
+                    dto.periapsis_m = o.PeR;
+                    dto.period_s = double.IsInfinity(o.period) ? -1 : o.period;
+                    if (kerbin != null && kerbin.orbit != null)
+                    {
+                        // If the asteroid is already orbiting Kerbin, encounter is "now"
+                        if (v.mainBody == kerbin)
+                        {
+                            dto.closest_kerbin_approach_ut = now;
+                            dto.closest_kerbin_approach_dist_m = 0;
+                            dto.will_enter_kerbin_soi = true;
+                            dto.t_minus_s = 0;
+                        }
+                        else
+                        {
+                            double caUT = o.NextClosestApproachTime(kerbin.orbit, now + 1);
+                            Vector3d astAt = o.getPositionAtUT(caUT);
+                            Vector3d kerAt = kerbin.orbit.getPositionAtUT(caUT);
+                            double dist = (astAt - kerAt).magnitude;
+                            dto.closest_kerbin_approach_ut = caUT;
+                            dto.closest_kerbin_approach_dist_m = dist;
+                            dto.will_enter_kerbin_soi = dist < kerbin.sphereOfInfluence;
+                            dto.t_minus_s = caUT - now;
+                        }
+                    }
+                }
+                result.Add(dto);
             }
             return result;
         }

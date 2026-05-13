@@ -23,7 +23,8 @@ namespace MuMech.Mcp
             MechJebCore core = AscentCapability.ResolveMaster();
             MechJebModuleSmartASS sas = core.SmartASS;
             if (sas == null) throw new McpException(ErrorCode.Internal, "SmartASS module not present");
-            if (sas.Hidden) throw new McpException(ErrorCode.ModuleHidden, "SmartASS is hidden on this vessel");
+            // Hidden=true in career mode means the player hasn't unlocked it via R&D, but the
+            // module is loaded and functional. MCP operates outside the UI gate.
 
             // Mode=TARGET requires a target.
             if (RequiresTarget(target) && FlightGlobals.ActiveVessel?.targetObject == null)

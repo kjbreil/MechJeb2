@@ -6,13 +6,13 @@ This is the precise wire contract the MechJeb MCP server speaks. For operator-fa
 
 - **HTTP only.** Bound to `127.0.0.1` exclusively. HTTPS rejected on Mono (Unity 2019.4 / Mono 5.x has known TLS bugs in `HttpListener`).
 - **Single endpoint:** `POST /mcp/` (trailing slash required).
-- **Wire format:** JSON-RPC 2.0 with MCP framing per spec revision `2025-06-18`.
+- **Wire format:** JSON-RPC 2.0 with MCP framing per spec revision `2025-11-25`.
 - **Required request headers:**
   - `Content-Type: application/json` (anything else → HTTP 415)
   - `Accept: application/json, text/event-stream`
   - `Host:` must be `127.0.0.1`, `localhost`, or `[::1]` (with optional port). Other values → HTTP 400.
   - `Origin:` if present, must be one of `http://localhost[:*]`, `http://127.0.0.1[:*]`, `http://[::1][:*]`, or absent. `null` Origin is gated by `allow_null_origin` setting (default false).
-  - `MCP-Protocol-Version: 2025-06-18` required on every call **except** `initialize` and `notifications/initialized`. Missing → HTTP 400 + `PROTOCOL_VERSION_MISSING`. Wrong value → HTTP 400 + `PROTOCOL_VERSION_UNSUPPORTED`.
+  - `MCP-Protocol-Version: 2025-11-25` required on every call **except** `initialize`; `2025-06-18` is also accepted for older clients. Missing → HTTP 400 + `PROTOCOL_VERSION_MISSING`. Wrong value → HTTP 400 + `PROTOCOL_VERSION_UNSUPPORTED`.
 - **Body size cap:** 1 MB. Larger → HTTP 413. Chunked-transfer requests with no `Content-Length` are also size-capped at the read layer.
 - **Optional `Mcp-Session-Id`:** server emits a UUID in the `initialize` response header; clients may echo on subsequent requests.
 
@@ -22,7 +22,7 @@ Client → server:
 
 ```json
 {"jsonrpc":"2.0","id":1,"method":"initialize","params":{
-  "protocolVersion":"2025-06-18",
+  "protocolVersion":"2025-11-25",
   "capabilities":{},
   "clientInfo":{"name":"<client>","version":"<x.y>"}}}
 ```
@@ -31,7 +31,7 @@ Server → client:
 
 ```json
 {"jsonrpc":"2.0","id":1,"result":{
-  "protocolVersion":"2025-06-18",
+  "protocolVersion":"2025-11-25",
   "capabilities":{"tools":{"listChanged":true}},
   "serverInfo":{"name":"mechjeb-mcp","version":"1.0.0-phase6"},
   "instructions":"MechJeb capability server. Call mj_status first..."}}
@@ -45,7 +45,7 @@ Client must then send the notification (no response, HTTP 202):
 
 ## Tool invocation result shape
 
-Per MCP 2025-06-18, `tools/call` returns BOTH `structuredContent` (typed clients) AND a text-content mirror (older clients). Both encode the same data.
+Per MCP 2025-11-25, `tools/call` returns BOTH `structuredContent` (typed clients) AND a text-content mirror (older clients). Both encode the same data.
 
 Success:
 

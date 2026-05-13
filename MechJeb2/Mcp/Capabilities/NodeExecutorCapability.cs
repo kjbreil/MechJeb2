@@ -19,10 +19,12 @@ namespace MuMech.Mcp
 
             MechJebModuleNodeExecutor exec = core.Node;
             if (exec == null) throw new McpException(ErrorCode.Internal, "Core.Node is null");
-            // Use the singleton MechJebMcpUser as the User identity. NodeExecutor's
-            // ExecuteOneNode expects a ComputerModule controller; we wrap the engage
-            // via Users.Add directly to keep our singleton-not-ComputerModule design.
+            // Track engagement first so GameEvent aborts can disengage us cleanly,
+            // then call ExecuteOneNode which runs Init() — sets state to WARPALIGN
+            // and locks the Attitude/Thrust controllers. Users.Add inside
+            // ExecuteOneNode is idempotent (HashSet).
             MechJebMcpUser.Instance.Engage(exec);
+            exec.ExecuteOneNode(MechJebMcpUser.Instance);
             return new AutopilotOp(exec, () => new JsonObject().Set("status", "complete"));
         }
 
@@ -35,9 +37,13 @@ namespace MuMech.Mcp
         public static IRunningOp ExecuteAll()
         {
             MechJebCore core = AscentCapability.ResolveMaster();
+            if (FlightGlobals.ActiveVessel?.patchedConicSolver?.maneuverNodes == null
+                || FlightGlobals.ActiveVessel.patchedConicSolver.maneuverNodes.Count == 0)
+                throw new McpException(ErrorCode.NoManeuverNode, "No maneuver nodes to execute. Plan one first.");
             MechJebModuleNodeExecutor exec = core.Node;
             if (exec == null) throw new McpException(ErrorCode.Internal, "Core.Node is null");
             MechJebMcpUser.Instance.Engage(exec);
+            exec.ExecuteAllNodes(MechJebMcpUser.Instance);
             return new AutopilotOp(exec);
         }
 

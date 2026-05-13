@@ -33,7 +33,7 @@ if [[ -z "$URL" ]]; then
   exit 2
 fi
 
-PROTO="2025-06-18"
+PROTO="2025-11-25"
 COMMON=( -sS -H "Content-Type: application/json"
          -H "Accept: application/json, text/event-stream"
          -H "Host: 127.0.0.1" )
@@ -49,7 +49,7 @@ post_init() {
 }
 
 echo "--- initialize ---"
-post_init '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"smoke","version":"1.0"}}}' | tee /tmp/mcp_init.json
+post_init '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"smoke","version":"1.0"}}}' | tee /tmp/mcp_init.json
 echo
 
 echo "--- notifications/initialized ---"

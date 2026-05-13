@@ -1,0 +1,127 @@
+{
+  "schemaVersion": 3,
+  "instructions": {
+    "path": "AGENTS.md"
+  },
+  "integrations": {
+    "enabled": [
+      "codex",
+      "claude",
+      "gemini",
+      "copilot_vscode",
+      "junie",
+      "opencode"
+    ],
+    "options": {
+      "cursorAutoApprove": true,
+      "antigravityGlobalSync": true
+    }
+  },
+  "syncMode": "source-only",
+  "mcp": {
+    "servers": {
+      "filesystem": {
+        "label": "Filesystem",
+        "description": "Read and write files in the current project",
+        "transport": "stdio",
+        "command": "npx",
+        "args": [
+          "-y",
+          "@modelcontextprotocol/server-filesystem",
+          "${PROJECT_ROOT}"
+        ],
+        "targets": [
+          "codex",
+          "claude",
+          "gemini",
+          "copilot_vscode",
+          "cursor",
+          "antigravity",
+          "windsurf",
+          "opencode"
+        ],
+        "enabled": true
+      },
+      "fetch": {
+        "label": "Fetch",
+        "description": "HTTP fetching and scraping helpers",
+        "transport": "stdio",
+        "command": "uvx",
+        "args": [
+          "mcp-server-fetch"
+        ],
+        "env": {
+          "FASTMCP_LOG_LEVEL": "ERROR"
+        },
+        "targets": [
+          "codex",
+          "claude",
+          "gemini",
+          "copilot_vscode",
+          "cursor",
+          "antigravity",
+          "windsurf",
+          "opencode"
+        ],
+        "enabled": true
+      },
+      "git": {
+        "label": "Git",
+        "description": "Repository-aware git operations",
+        "transport": "stdio",
+        "command": "uvx",
+        "args": [
+          "mcp-server-git",
+          "--repository",
+          "${PROJECT_ROOT}"
+        ],
+        "env": {
+          "FASTMCP_LOG_LEVEL": "ERROR"
+        },
+        "targets": [
+          "codex",
+          "claude",
+          "gemini",
+          "copilot_vscode",
+          "cursor",
+          "antigravity",
+          "windsurf",
+          "opencode"
+        ],
+        "enabled": true
+      },
+      "mechjeb": {
+        "transport": "http",
+        "enabled": true,
+        "targets": [
+          "codex",
+          "claude",
+          "gemini",
+          "copilot_vscode",
+          "junie",
+          "opencode"
+        ],
+        "description": "MechJeb2 in-process MCP server. Launch KSP with mcp_settings.cfg enabled = True.",
+        "url": "http://127.0.0.1:17653/mcp/"
+      }
+    }
+  },
+  "workspace": {
+    "vscode": {
+      "hideGenerated": true,
+      "hiddenPaths": [
+        "**/.codex",
+        "**/.claude",
+        "**/.gemini",
+        "**/.cursor",
+        "**/.antigravity",
+        "**/.windsurf",
+        "**/.opencode",
+        "**/opencode.json",
+        "**/.agents/generated"
+      ]
+    }
+  },
+  "lastSync": "2026-05-11T02:36:02.562Z",
+  "lastSyncSourceHash": "02edfe34269182e7106befc96beb02b49d52833f5808b971880c40b8481d4c06"
+}

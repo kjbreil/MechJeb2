@@ -98,5 +98,62 @@ namespace MuMech.Mcp
             for (int i = 0; i < scenes.Length; i++) arr[i] = scenes[i].ToString();
             return arr;
         }
+
+        public sealed class UnlockResultDto
+        {
+            public int modules_unhidden;
+            public int modules_unlock_checked;
+            public string[] unhidden_names;
+        }
+
+        [McpCommand("dev/unlock_mechjeb_modules",
+            Description = "In Career/Science mode, MechJeb modules not yet unlocked via R&D are flagged " +
+                          "Hidden=true (greyed in the in-game GUI). This command iterates the active vessel's " +
+                          "MechJebCore's modules and sets Hidden=false + marks UnlockChecked=true so the GUI " +
+                          "shows every panel. MCP tools already bypass these gates; this is for in-game UI " +
+                          "parity. Idempotent — safe to call multiple times.",
+            SideEffect = SideEffect.Mutating,
+            RequiredScenes = "FLIGHT",
+            Version = "1.0.0")]
+        public static UnlockResultDto UnlockMechJebModules()
+        {
+            MechJebCore core = AscentCapability.ResolveMaster();
+            var unhidden = new List<string>();
+            int unlockChecked = 0;
+            foreach (ComputerModule mod in core.GetComputerModules<ComputerModule>())
+            {
+                if (mod == null) continue;
+                if (!mod.UnlockChecked)
+                {
+                    mod.UnlockChecked = true;
+                    unlockChecked++;
+                }
+                if (mod is DisplayModule dm && dm.Hidden)
+                {
+                    // Skip MechJebModuleMenu — it's the toolbar button rendered
+                    // as a "hidden window", and un-hiding it actually breaks the
+                    // menu (the window draws but the button stops). Same for the
+                    // sub-menu modules whose default state is Hidden=true and
+                    // which are only opened via parent UI clicks.
+                    string n = dm.GetType().Name;
+                    if (n == "MechJebModuleMenu" ||
+                        n == "MechJebModuleAscentClassicPathMenu" ||
+                        n == "MechJebModuleAscentPSGSettingsMenu" ||
+                        n == "MechJebModuleAscentSettingsMenu" ||
+                        n == "MechJebModuleWaypointWindow" ||
+                        n == "MechJebModuleWaypointHelpWindow")
+                        continue;
+                    dm.Hidden = false;
+                    unhidden.Add(n);
+                }
+            }
+            core.someModuleAreLocked = false;
+            return new UnlockResultDto
+            {
+                modules_unhidden = unhidden.Count,
+                modules_unlock_checked = unlockChecked,
+                unhidden_names = unhidden.ToArray(),
+            };
+        }
     }
 }
